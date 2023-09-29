@@ -60,27 +60,13 @@ class SQLDatabase:
 
         self._inspector = inspect(self._engine)
 
-        # including view support by adding the views as well as tables to the all
-        # tables list if view_support is True
-        self._all_tables = set(
-            self._inspector.get_table_names(schema=schema)
-            + (self._inspector.get_view_names(schema=schema) if view_support else [])
-        )
+        widest_tables = self._get_all_possible_tables(view_support)
+        # tolerate a database with no tables
+        self._all_tables = set(widest_tables) if widest_tables else set()
 
         self._include_tables = set(include_tables) if include_tables else set()
-        if self._include_tables:
-            missing_tables = self._include_tables - self._all_tables
-            if missing_tables:
-                raise ValueError(
-                    f"include_tables {missing_tables} not found in database"
-                )
         self._ignore_tables = set(ignore_tables) if ignore_tables else set()
-        if self._ignore_tables:
-            missing_tables = self._ignore_tables - self._all_tables
-            if missing_tables:
-                raise ValueError(
-                    f"ignore_tables {missing_tables} not found in database"
-                )
+
         usable_tables = self.get_usable_table_names()
         self._usable_tables = set(usable_tables) if usable_tables else self._all_tables
 
@@ -267,11 +253,34 @@ class SQLDatabase:
         """Return string representation of dialect to use."""
         return self._engine.dialect.name
 
+    def _get_all_possible_tables(self, view_support: bool) -> Iterable[str]:
+        tables = self._inspector.get_table_names(schema=self._schema)
+
+        # including view support by adding the views as well as tables to the all
+        # tables list if view_support is True
+        views = self._inspector.get_view_names(schema=self._schema) if view_support else []
+
+        return sorted(tables + views)
+
     def get_usable_table_names(self) -> Iterable[str]:
-        """Get names of tables available."""
+        """Narrow the list of tables, based on inclusion or ignore"""
+        if self._ignore_tables:
+            missing_tables = self._ignore_tables - self._all_tables
+            if missing_tables:
+                raise ValueError(
+                    f"ignore_tables {missing_tables} not found in database"
+                )
+            return sorted(self._all_tables - self._ignore_tables)
+
         if self._include_tables:
+            missing_tables = self._include_tables - self._all_tables
+            if missing_tables:
+                raise ValueError(
+                    f"include_tables {missing_tables} not found in database"
+                )
             return sorted(self._include_tables)
-        return sorted(self._all_tables - self._ignore_tables)
+
+        return sorted(self._all_tables)
 
     def get_table_names(self) -> Iterable[str]:
         """Get names of tables available."""
