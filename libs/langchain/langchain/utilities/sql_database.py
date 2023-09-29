@@ -256,11 +256,25 @@ class SQLDatabase:
     def _get_all_possible_tables(self, view_support: bool) -> Iterable[str]:
         tables = self._inspector.get_table_names(schema=self._schema)
 
+        more_tables = []
+        if self.dialect.startswith("mssql"):
+            more_tables = self._engine.execute(
+                f"SELECT table_name FROM information_schema.tables WHERE table_type = 'BASE TABLE'"
+                " AND table_catalog = '{self._engine.url.database}'"
+            )
+        if self.dialect.startswith("postgresql"):
+            more_tables = self._engine.execute(
+                f"SELECT table_name FROM information_schema.tables WHERE table_type = 'BASE TABLE'"
+                f"AND table_schema = 'public';"
+            )
+
         # including view support by adding the views as well as tables to the all
         # tables list if view_support is True
         views = self._inspector.get_view_names(schema=self._schema) if view_support else []
 
-        return sorted(tables + views)
+        # likely duplicates (views named same as tables, or from different ways of fetching)
+        # but start wide
+        return sorted(tables + more_tables + views)
 
     def get_usable_table_names(self) -> Iterable[str]:
         """Narrow the list of tables, based on inclusion or ignore"""
