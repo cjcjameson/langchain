@@ -259,21 +259,25 @@ class SQLDatabase:
         more_tables = []
         if self.dialect.startswith("mssql"):
             more_tables = self._engine.execute(
-                f"SELECT table_name FROM information_schema.tables WHERE table_type = 'BASE TABLE'"
-                " AND table_catalog = '{self._engine.url.database}'"
+                "SELECT table_name FROM information_schema.tables "
+                "WHERE table_type = 'BASE TABLE' "
+                f"AND table_catalog = '{self._engine.url.database}'"
             )
         if self.dialect.startswith("postgresql"):
             more_tables = self._engine.execute(
-                f"SELECT table_name FROM information_schema.tables WHERE table_type = 'BASE TABLE'"
-                f"AND table_schema = 'public';"
+                "SELECT table_name FROM information_schema.tables "
+                "WHERE table_type = 'BASE TABLE' "
+                "AND table_schema = 'public';"
             )
 
         # including view support by adding the views as well as tables to the all
         # tables list if view_support is True
-        views = self._inspector.get_view_names(schema=self._schema) if view_support else []
+        views = []
+        if view_support:
+            views = self._inspector.get_view_names(schema=self._schema)
 
-        # likely duplicates (views named same as tables, or from different ways of fetching)
-        # but start wide
+        # likely duplicates (views named same as tables,
+        # or from different ways of fetching), but start wide
         return sorted(tables + more_tables + views)
 
     def get_usable_table_names(self) -> Iterable[str]:
